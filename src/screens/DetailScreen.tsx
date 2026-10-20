@@ -1,127 +1,74 @@
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { DishCategory } from '../models/types';
-import { createDish, getCategories, updateDish } from '../services/api';
+﻿import { useState } from 'react';
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { deleteDish } from '../services/api';
+import { Dish, DishImage } from '../models/types';
 
-export default function AddEditScreen({ route, navigation }: any) {
-  const editingDish = route.params?.dish;
+type Props = { route: { params?: { dish?: Dish } }; navigation: { goBack: () => void; navigate?: (name: string, params?: object) => void } };
 
-  const [name, setName] = useState(editingDish ? editingDish.bcs240053_name : '');
-  const [price, setPrice] = useState(editingDish ? String(editingDish.bcs240053_price) : '');
-  const [prepTime, setPrepTime] = useState(editingDish ? String(editingDish.bcs240053_preparationTime) : '');
-  const [description, setDescription] = useState(editingDish ? editingDish.bcs240053_description : '');
-  const [isAvailable, setIsAvailable] = useState(editingDish ? editingDish.bcs240053_isAvailable : true);
-  const [categoryId, setCategoryId] = useState(editingDish ? String(editingDish.bcs240053_dishCategoryId) : '');
-  
-  const [imageUrl, setImageUrl] = useState('');
-  const [images, setImages] = useState<any[]>(editingDish ? editingDish.bcs240053_images || [] : []);
-  const [categories, setCategories] = useState<DishCategory[]>([]);
+export default function DetailScreen({ route, navigation }: Props) {
+  const dish = route.params?.dish;
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    getCategories().then(setCategories).catch(console.error);
-  }, []);
-
-  const handleAddImage = () => {
-    if (!imageUrl) return;
-    const isFirst = images.length === 0; // Ảnh đầu tiên mặc định là thumbnail
-    setImages([...images, { imageUrl, isThumbnail: isFirst }]);
-    setImageUrl('');
-  };
-
-  const handleSave = async () => {
-    // Ràng buộc validation cơ bản
-    if (!name.trim()) {
-      Alert.alert("Lỗi", "Tên món ăn không được để trống!");
+  const handleDelete = async () => {
+    if (dish?.id === undefined || dish.id === null || String(dish.id).trim() === '') {
+      setError('Không tìm thấy ID món ăn.');
+      setConfirmVisible(false);
       return;
     }
-    if (Number(price) <= 0) {
-      Alert.alert("Lỗi", "Giá tiền phải lớn hơn 0!");
-      return;
-    }
-    if (Number(prepTime) <= 0) {
-      Alert.alert("Lỗi", "Thời gian chế biến phải lớn hơn 0 phút!");
-      return;
-    }
-    if (!categoryId) {
-      Alert.alert("Lỗi", "Vui lòng chọn loại món ăn!");
-      return;
-    }
-
-    const dishPayload = {
-      bcs240053_name: name,
-      bcs240053_price: Number(price),
-      bcs240053_preparationTime: Number(prepTime),
-      bcs240053_isAvailable: isAvailable,
-      bcs240053_description: description,
-      bcs240053_dishCategoryId: categoryId,
-      bcs240053_images: images,
-    };
-
+    setDeleting(true);
+    setError('');
     try {
-      if (editingDish) {
-        await updateDish(editingDish.id, dishPayload);
-        Alert.alert("Thành công", "Đã cập nhật món ăn!");
-      } else {
-        await createDish(dishPayload);
-        Alert.alert("Thành công", "Đã thêm món ăn mới!");
-      }
+      await deleteDish(dish.id);
+      setConfirmVisible(false);
       navigation.goBack();
-    } catch (error) {
-      Alert.alert("Lỗi", "Có lỗi xảy ra khi lưu dữ liệu lên MockAPI.");
+    } catch (deleteError) {
+      console.error('Không thể xóa món ăn:', deleteError);
+      setConfirmVisible(false);
+      setError('Không thể xóa món ăn. Kiểm tra kết nối và MockAPI.');
+    } finally {
+      setDeleting(false);
     }
   };
 
-  return (
+  if (!dish) return <View style={styles.center}><Text>Không tìm thấy món ăn.</Text></View>;
+  const images: DishImage[] = Array.isArray(dish.bcs240053_images) ? dish.bcs240053_images.filter((image) => image?.imageUrl) : [];
+  const cover = images.find((image) => image.isThumbnail) ?? images[0];
+  const quick = Number(dish.bcs240053_preparationTime) <= 15;
+
+  return <>
     <ScrollView style={styles.container}>
-      <Text style={styles.label}>Tên món ăn (*)</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Nhập tên món..." />
-
-      <Text style={styles.label}>Giá tiền (VNĐ) (*)</Text>
-      <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="Nhập giá..." />
-
-      <Text style={styles.label}>Thời gian chế biến (phút) (*)</Text>
-      <TextInput style={styles.input} value={prepTime} onChangeText={setPrepTime} keyboardType="numeric" placeholder="Nhập số phút..." />
-
-      <Text style={styles.label}>Mô tả</Text>
-      <TextInput style={[styles.input, { height: 80 }]} value={description} onChangeText={setDescription} multiline placeholder="Nhập mô tả..." />
-
-      <View style={styles.row}>
-        <Text style={styles.label}>Đang bán</Text>
-        <Switch value={isAvailable} onValueChange={setIsAvailable} />
+      {cover ? <Image source={{ uri: cover.imageUrl }} style={styles.cover} /> : <View style={styles.noImage}><Text>Chưa có ảnh</Text></View>}
+      <View style={styles.content}>
+        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+        <Text style={styles.title}>{dish.bcs240053_name}</Text>
+        <Text style={styles.price}>{Number(dish.bcs240053_price || 0).toLocaleString()} VNĐ</Text>
+        <Text style={styles.info}>Thời gian chế biến: {dish.bcs240053_preparationTime} phút · {quick ? 'Quick / Nhanh' : 'Regular / Thông thường'}</Text>
+        <Text style={styles.info}>Trạng thái: {dish.bcs240053_isAvailable ? 'Đang bán' : 'Ngừng bán'}</Text>
+        <Text style={styles.section}>Mô tả</Text>
+        <Text style={styles.info}>{dish.bcs240053_description || 'Chưa có mô tả'}</Text>
+        <Text style={styles.section}>Danh sách ảnh ({images.length})</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.images}>
+          {images.map((image, index) => <View key={`${image.imageUrl}-${index}`} style={styles.imageWrap}><Image source={{ uri: image.imageUrl }} style={styles.image} />{image.isThumbnail && <Text style={styles.badge}>Ảnh đại diện</Text>}</View>)}
+        </ScrollView>
+        <View style={styles.actions}>
+          <TouchableOpacity style={[styles.button, styles.editButton]} onPress={() => navigation.navigate?.('AddEditScreen', { dish })}><Text style={styles.buttonText}>Chỉnh sửa</Text></TouchableOpacity>
+          <TouchableOpacity disabled={deleting} style={[styles.button, styles.deleteButton]} onPress={() => { setError(''); setConfirmVisible(true); }}><Text style={styles.buttonText}>Xóa món</Text></TouchableOpacity>
+        </View>
       </View>
-
-      <Text style={styles.label}>Chọn loại món (CategoryId):</Text>
-      {categories.map((cat) => (
-        <TouchableOpacity 
-          key={cat.id} 
-          style={[styles.catOption, categoryId === String(cat.id) && styles.selectedCat]}
-          onPress={() => setCategoryId(String(cat.id))}
-        >
-          <Text>{cat.bcs240053_name}</Text>
-        </TouchableOpacity>
-      ))}
-
-      <Text style={styles.label}>Thêm URL Ảnh</Text>
-      <View style={{ flexDirection: 'row', marginBottom: 10 }}>
-        <TextInput style={[styles.input, { flex: 1, marginBottom: 0 }]} value={imageUrl} onChangeText={setImageUrl} placeholder="Dán link ảnh vào đây..." />
-        <TouchableOpacity style={styles.addImgBtn} onPress={handleAddImage}><Text style={{color: '#fff'}}>Thêm</Text></TouchableOpacity>
-      </View>
-
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveBtnText}>{editingDish ? 'Cập Nhật Món Ăn' : 'Thêm Món Ăn'}</Text>
-      </TouchableOpacity>
     </ScrollView>
-  );
+    <Modal transparent visible={confirmVisible} animationType="fade" onRequestClose={() => { if (!deleting) setConfirmVisible(false); }}>
+      <View style={styles.backdrop}><View style={styles.dialog}>
+        <Text style={styles.dialogTitle}>Xác nhận xóa</Text>
+        <Text style={styles.info}>Bạn có chắc chắn muốn xóa món “{dish.bcs240053_name}” không?</Text>
+        <View style={styles.actions}>
+          <TouchableOpacity disabled={deleting} style={[styles.button, styles.cancelButton]} onPress={() => setConfirmVisible(false)}><Text style={styles.cancelText}>Hủy</Text></TouchableOpacity>
+          <TouchableOpacity disabled={deleting} style={[styles.button, styles.deleteButton]} onPress={() => void handleDelete()}><Text style={styles.buttonText}>{deleting ? 'Đang xóa…' : 'Xóa món'}</Text></TouchableOpacity>
+        </View>
+      </View></View>
+    </Modal>
+  </>;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  label: { fontWeight: 'bold', marginBottom: 6, marginTop: 10 },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 8, borderRadius: 8, marginBottom: 10 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10 },
-  catOption: { padding: 10, borderWidth: 1, borderColor: '#eee', borderRadius: 6, marginBottom: 5 },
-  selectedCat: { backgroundColor: '#e0f7fa', borderColor: '#00acc1' },
-  addImgBtn: { backgroundColor: '#27ae60', justifyContent: 'center', paddingHorizontal: 16, borderRadius: 8, marginLeft: 8 },
-  saveBtn: { backgroundColor: '#2980b9', padding: 14, borderRadius: 8, alignItems: 'center', marginVertical: 30 },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
-});
+const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: '#fff' }, center: { flex: 1, alignItems: 'center', justifyContent: 'center' }, cover: { width: '100%', height: 250, backgroundColor: '#eee' }, noImage: { height: 190, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eee' }, content: { padding: 16 }, title: { fontSize: 23, fontWeight: '800', color: '#18392e' }, price: { marginTop: 8, fontSize: 19, color: '#b66337', fontWeight: '700' }, info: { marginTop: 8, color: '#58675e' }, section: { marginTop: 18, fontWeight: '700', color: '#18392e' }, images: { gap: 10, paddingVertical: 10 }, imageWrap: { position: 'relative' }, image: { width: 90, height: 90, borderRadius: 8, backgroundColor: '#eee' }, badge: { position: 'absolute', bottom: 3, left: 3, right: 3, color: '#fff', backgroundColor: '#18392ecc', textAlign: 'center', fontSize: 10, borderRadius: 5, overflow: 'hidden' }, actions: { flexDirection: 'row', gap: 10, marginTop: 20 }, button: { flex: 1, alignItems: 'center', padding: 13, borderRadius: 9 }, editButton: { backgroundColor: '#16845b' }, deleteButton: { backgroundColor: '#b54736' }, buttonText: { color: '#fff', fontWeight: '700' }, error: { color: '#b54736', backgroundColor: '#fce9e7', padding: 10, borderRadius: 8 }, backdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.45)' }, dialog: { width: '100%', maxWidth: 380, padding: 20, borderRadius: 16, backgroundColor: '#fff' }, dialogTitle: { fontSize: 19, fontWeight: '800', color: '#18392e' }, cancelButton: { backgroundColor: '#edf0ed' }, cancelText: { color: '#34483d', fontWeight: '700' } });

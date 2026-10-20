@@ -37,6 +37,8 @@ export default function HomeScreen({ navigation }: any) {
 
   useEffect(() => {
     fetchData();
+    const unsubscribe = navigation?.addListener?.('focus', fetchData);
+    return unsubscribe;
   }, []);
 
   // Xử lý logic tìm kiếm, lọc và sắp xếp
