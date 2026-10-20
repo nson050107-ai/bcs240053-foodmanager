@@ -1,18 +1,21 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+﻿import { Stack } from 'expo-router';
+import { LanguageProvider, useLanguage } from '../contexts/language';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+function AppStack() {
+  const { language } = useLanguage();
+  const titles = language === 'en'
+    ? { home: 'Food Manager', detail: 'Dish details', form: 'Dish editor' }
+    : { home: 'Quản lý món ăn', detail: 'Chi tiết món ăn', form: 'Thêm / sửa món' };
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <Stack>
+      <Stack.Screen name="index" options={{ title: titles.home }} />
+      <Stack.Screen name="detail" options={{ title: titles.detail }} />
+      <Stack.Screen name="add-edit" options={{ title: titles.form }} />
+      <Stack.Screen name="categories" options={{ title: language === 'en' ? 'Category management' : 'Quản lý loại món' }} />
+    </Stack>
   );
+}
+
+export default function RootLayout() {
+  return <LanguageProvider><AppStack /></LanguageProvider>;
 }
